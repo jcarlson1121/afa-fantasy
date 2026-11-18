@@ -165,7 +165,7 @@ function applyLive(raw){
 }
 async function refreshLive(manual=false){
  if(liveBusy)return;liveBusy=true;document.getElementById('liveRefresh').disabled=true;liveState('loading','Checking Dynasty Tracker…');
- try{const ctl=new AbortController(),timeout=setTimeout(()=>ctl.abort(),25000);let response;try{response=await fetch(LIVE_SOURCE+'&_t='+Date.now(),{mode:'cors',cache:'no-store',signal:ctl.signal})}finally{clearTimeout(timeout)}
+ try{const ctl=new AbortController(),timeout=setTimeout(()=>ctl.abort(),25000);let response;try{response=await fetch(LIVE_SOURCE+'?_t='+Date.now(),{mode:'cors',cache:'no-store',signal:ctl.signal})}finally{clearTimeout(timeout)}
  if(!response.ok)throw Error('HTTP '+response.status);const raw=await response.json();const info=applyLive(raw);liveUpdatedAt=new Date();liveState('live',`LIVE · ${liveUpdatedAt.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})} · ${info.games} finals`);
  }catch(err){liveState('fallback',liveUpdatedAt?`Last live sync ${liveUpdatedAt.toLocaleTimeString()} · refresh failed`:'Saved snapshot · live connection unavailable');if(manual)alert('Could not access the live Dynasty Tracker feed from this page. The saved league data is still available. Check that the Cloudflare Pages Function /api/league is deployed and the upstream Dynasty Tracker feed is reachable.\n\n'+err.message);console.warn('AFA live sync:',err)}finally{liveBusy=false;document.getElementById('liveRefresh').disabled=false;}
 }
