@@ -23,6 +23,38 @@ const enhancement = String.raw`<script>
     };
     if(typeof tab!=='undefined' && tab==='rules')render();
   }
+
+  // In each game's Fantasy Stats view, show metadata and running season points
+  // through that specific game, not the player's eventual season total.
+  if (typeof scorePlayerCell === 'function') {
+    scorePlayerCell = function(entry) {
+      if (!entry) return '<div class="muted small">—</div>';
+      const player = entry.id ? P.find(p => String(p.id) === String(entry.id)) : null;
+      const game = typeof openGameId !== 'undefined' ? D.scores.find(g => String(g.id) === String(openGameId)) : null;
+      const week = game ? Number(game.week) : NaN;
+      const currentGameId = game ? String(game.id) : '';
+      const pos = player ? (player.pos || player.group || '—') : (entry.group && entry.group !== 'OTHER' ? entry.group : '—');
+      const ovr = player && Number.isFinite(Number(player.ovr)) ? String(player.ovr) : '—';
+      let total = null;
+      if (player && game && Number.isFinite(week) && Array.isArray(player.games)) {
+        total = player.games.reduce((sum, log) => {
+          const logWeek = Number(log.week);
+          // A same-week record counts only if it belongs to this exact game.
+          if (Number.isFinite(logWeek) && (logWeek < week ||
+              (logWeek === week && String(log.gameId || '') === currentGameId))) {
+            const points = Number(log.score);
+            return sum + (Number.isFinite(points) ? points : 0);
+          }
+          return sum;
+        }, 0);
+      }
+      const totalText = total === null ? '—' : total.toFixed(2);
+      const label = pos + ' · ' + ovr + ' OVR · ' + totalText + ' total pts';
+      return '<div class="playername">' +
+        (entry.id ? '<button onclick="openPlayer(\'' + esc(entry.id) + '\')">' + esc(entry.name) + '</button>' : esc(entry.name)) +
+        '</div><div class="substats" title="' + esc(label) + '">' + esc(label) + '</div>';
+    };
+  }
   const order = ['QB','HB','WR','TE','OL','DT','EDGE','LB','CB','S','K','P','OTHER'];
   function group(position) {
     const p=String(position||'').toUpperCase().trim().replace(/[.\s_-]+/g,'');
