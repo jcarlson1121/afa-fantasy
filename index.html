@@ -51,7 +51,27 @@ for(const game of D.scores){
 }
 const teamGP=p=>teamPlayedGames[String(p.tid)]||0;
 const playerPPG=p=>teamGP(p)>0?p.points/teamGP(p):null;
-let tab='scores',team='',pos='ALL',query='',sort='points';const $=s=>document.querySelector(s);const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const num=n=>Number(n||0).toFixed(1);const teamMap=Object.fromEntries(T.map(t=>[t.id,t]));const groups=['ALL',...new Set(P.map(p=>p.group))].sort((a,b)=>a==='ALL'?-1:b==='ALL'?1:a.localeCompare(b));const nActive=P.filter(p=>p.games.length).length;
+let tab='scores',team='',pos='ALL',query='',sort='points';const $=s=>document.querySelector(s);const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const num=n=>Number(n||0).toFixed(1);const teamMap=Object.fromEntries(T.map(t=>[t.id,t]));// Consistent fantasy position groups for saved and live data.
+const groupOrders=['QB','HB','WR','TE','OL','DT','EDGE','LB','CB','S','K','P','OTHER'];
+function fantasyGroup(position){
+ const p=String(position||'').trim().toUpperCase().replace(/[.\s_-]+/g,'');
+ if(p==='QB')return 'QB';
+ if(['HB','RB','FB','TB'].includes(p))return 'HB';
+ if(['WR','SLOT'].includes(p))return 'WR';
+ if(['TE'].includes(p))return 'TE';
+ if(['OL','LT','LG','C','RG','RT','OT','OG','G','T'].includes(p))return 'OL';
+ if(['DT','DT1','DT2','NT','IDL'].includes(p))return 'DT';
+ if(['EDGE','LEDG','REDG','LE','RE','DE','RUSH'].includes(p))return 'EDGE';
+ if(['LB','LOLB','ROLB','MLB','OLB','ILB','SAM','MIKE','WILL'].includes(p))return 'LB';
+ if(['CB','CB1','CB2','DB','NB'].includes(p))return 'CB';
+ if(['S','FS','SS','SAF'].includes(p))return 'S';
+ if(['K','PK'].includes(p))return 'K';
+ if(['P'].includes(p))return 'P';
+ return 'OTHER';
+}
+const groupRank=g=>{const i=groupOrders.indexOf(fantasyGroup(g));return i<0?groupOrders.length:i};
+for(const player of P)player.group=fantasyGroup(player.pos||player.group);
+const groups=['ALL',...new Set(P.map(p=>p.group))].sort((a,b)=>a==='ALL'?-1:b==='ALL'?1:groupRank(a)-groupRank(b));const nActive=P.filter(p=>p.games.length).length;
 function updateStats(){ $('#stats').innerHTML=[['PLAYERS',P.length.toLocaleString()],['TEAMS',T.length],['COMPLETED GAMES',D.meta.games],['PLAYERS WITH BOX SCORES',nActive.toLocaleString()]].map(x=>`<div class="stat"><span class="muted small">${x[0]}</span><strong>${x[1]}</strong></div>`).join('')}
 function options(){return `<div class="controls"><input id="search" placeholder="Search players or teams…" value="${esc(query)}" oninput="query=this.value;renderTable()"><select id="pos" onchange="pos=this.value;renderTable()">${groups.map(g=>`<option ${pos===g?'selected':''}>${g}</option>`).join('')}</select><select onchange="sort=this.value;renderTable()"><option value="points" ${sort==='points'?'selected':''}>Total points</option><option value="avg" ${sort==='avg'?'selected':''}>Points per game</option><option value="hype" ${sort==='hype'?'selected':''}>Hype score</option><option value="ovr" ${sort==='ovr'?'selected':''}>Overall rating</option><option value="name" ${sort==='name'?'selected':''}>Player name</option></select></div>`}
 function filtered(){let a=P.filter(p=>(!team||p.tid===team)&&(pos==='ALL'||p.group===pos)&&(!query||(p.name+' '+p.team+' '+p.pos).toLowerCase().includes(query.toLowerCase())));a.sort((a,b)=>sort==='name'?a.name.localeCompare(b.name):sort==='avg'?((playerPPG(b)??-999)-(playerPPG(a)??-999)):sort==='hype'?(b.hype??-1)-(a.hype??-1):sort==='ovr'?(b.ovr??0)-(a.ovr??0):b.points-a.points);return a}
@@ -75,8 +95,8 @@ function renderScores(){if(tab!=='scores')return;scoresPage()}
 function updateScoreCards(){let g=D.scores.filter(g=>Number(g.week)===scoresWeek).filter(g=>scoreFilter==='all'||(scoreFilter==='final'?g.played:!g.played)).filter(g=>!scoreSearch||g.sides.some(s=>(s.name+' '+s.abbr).toLowerCase().includes(scoreSearch.toLowerCase())));const el=$('#scorecards');if(!el)return;$('#scorecount').textContent=`${g.length} matchup${g.length===1?'':'s'} · ${g.filter(x=>x.played).length} final`;
  el.innerHTML=g.map(x=>`<button class="matchcard" onclick="openScoreHub('${esc(x.id)}')"><div class="matchtop"><span>WEEK ${x.week}${x.conf?' · CONFERENCE':''}</span><span>${x.played?'FINAL':'SCHEDULED'}</span></div>${x.sides.map(t=>`<div class="matchside ${isWinner(x,t)?'win':''}">${safeLogo(t)}<strong>${esc(t.name)}</strong><span class="points">${x.played?(t.score??'—'):'—'}</span></div>`).join('')}${x.played?`<div class="teamfp"><span>Fantasy pts · ${esc(x.sides[0].abbr)} ${fmt2(x.sides[0].fantasyTotal)}</span><span>${esc(x.sides[1].abbr)} ${fmt2(x.sides[1].fantasyTotal)}</span></div>`:'<div class="teamfp">Box score not recorded yet</div>'}</button>`).join('')||'<div class="empty">No games match the selected filters.</div>';
 }
-const posOf=id=>P.find(p=>p.id===id)?.group||'OTHER';
-const groupOrders=['QB','HB','FB','WR','TE','OL','EDGE','DT','LB','CB','S','K','P','OTHER'];
+const posOf=id=>fantasyGroup(P.find(p=>p.id===id)?.group||'OTHER');
+// Position order is defined centrally above and shared with live refresh.
 function teamRows(game,team){return team.players.map(p=>({...p,group:posOf(p.id)})).sort((a,b)=>groupOrders.indexOf(a.group)-groupOrders.indexOf(b.group)||(b.pts??-1e6)-(a.pts??-1e6))}
 function scorePlayerCell(p){
  if(!p)return '<div class="muted small">—</div>';
@@ -134,7 +154,7 @@ function applyLive(raw){
  const teamByID=new Map(teams.map(t=>[t.id,t]));
  const oldPlayers=new Map(P.map(p=>[p.id,p]));
  const people=rawPlayers.map(p=>{const id=String(p.id||('player-'+p.pid));const tid=String(p.teamsByYear?.[String(root.currentYear||2025)]||p.team||'');const t=teamByID.get(tid)||{};const old=oldPlayers.get(id)||{};
- return {id,name:p.name||[p.firstName,p.lastName].filter(Boolean).join(' ')||old.name||'Unknown',tid,team:t.name||tid,abbr:t.abbr||'',pos:p.position||old.pos||'—',group:p.position||old.group||'—',ovr:p.overall??old.ovr??null,class:p.year||old.class||'',dev:p.devTrait||old.dev||'',hype:old.hype??null,gp:0,points:0,games:[],news:old.news||[],seasonStats:p.statsByYear?.[String(root.currentYear||2025)]||{},photo:p.pictureUrl||'',rankPct:null};});
+ return {id,name:p.name||[p.firstName,p.lastName].filter(Boolean).join(' ')||old.name||'Unknown',tid,team:t.name||tid,abbr:t.abbr||'',pos:p.position||old.pos||'—',group:fantasyGroup(p.position||old.pos||old.group),ovr:p.overall??old.ovr??null,class:p.year||old.class||'',dev:p.devTrait||old.dev||'',hype:old.hype??null,gp:0,points:0,games:[],news:old.news||[],seasonStats:p.statsByYear?.[String(root.currentYear||2025)]||{},photo:p.pictureUrl||'',rankPct:null};});
  const peopleById=new Map(people.map(p=>[p.id,p]));const byTidAndName=new Map();for(const p of people){const key=p.tid+'|'+normal(p.name);if(!byTidAndName.has(key))byTidAndName.set(key,[]);byTidAndName.get(key).push(p);}
  const scores=[];let matched=0,unmatched=0;
  for(const g of rawGames){const box=g.boxScore||{},by=box.byTid||{},tids=[String(g.team1Tid??''),String(g.team2Tid??'')];if(!tids[0]||!tids[1])continue;
@@ -158,7 +178,7 @@ function applyLive(raw){
  for(const k of Object.keys(teamPlayedGames))delete teamPlayedGames[k];for(const g of scores)if(g.played)for(const s of g.sides)teamPlayedGames[s.tid]=(teamPlayedGames[s.tid]||0)+1;
  // Update fixed lookup references; existing constants for map/group require a page reload after refresh.
  for(const k of Object.keys(teamMap))delete teamMap[k];for(const t of teams)teamMap[t.id]=t;
- for(const group of new Set(people.map(p=>p.group)))if(!groups.includes(group))groups.push(group);groups.sort((a,b)=>a==='ALL'?-1:b==='ALL'?1:a.localeCompare(b));
+ for(const group of new Set(people.map(p=>p.group)))if(!groups.includes(group))groups.push(group);groups.sort((a,b)=>a==='ALL'?-1:b==='ALL'?1:groupRank(a)-groupRank(b));
  for(const group of new Set(people.map(p=>p.group))){const ps=people.filter(p=>p.group===group&&teamGP(p)>0),rates=ps.map(p=>p.points/teamGP(p));for(const p of ps){const rate=p.points/teamGP(p);p.rankPct=Number((100*rates.filter(x=>x<=rate).length/rates.length).toFixed(1));}}
  updateStats=function(){$('#stats').innerHTML=[['PLAYERS',P.length.toLocaleString()],['TEAMS',T.length],['COMPLETED GAMES',D.meta.games],['PLAYERS WITH BOX SCORES',P.filter(p=>p.games.length).length.toLocaleString()]].map(x=>`<div class="stat"><span class="muted small">${x[0]}</span><strong>${x[1]}</strong></div>`).join('')};
  updateStats();render();return {players:people.length,games:D.meta.games,matched,unmatched};
