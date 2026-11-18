@@ -56,71 +56,6 @@ const enhancement = String.raw`<script>
     };
   }
 
-
-  // Reorganize Fantasy Stats into the eight specified, ordered combined position groups.
-  // Reuse the original matchup rows and player scoring; only layout and subtotals change.
-  const afaMatchGroups=['QB','HB/FB','WR/TE','OL','DT/EDGE','LBs','CB/S','K/P'];
-  function afaMatchGroup(position){
-    const p=String(position||'').toUpperCase();
-    if(p==='QB')return 'QB';
-    if(['HB','FB','RB','TB'].includes(p))return 'HB/FB';
-    if(['WR','TE','SLOT'].includes(p))return 'WR/TE';
-    if(['OL','LT','LG','C','RG','RT','OT','OG','G','T'].includes(p))return 'OL';
-    if(['DT','EDGE','LEDG','REDG','LE','RE','DE','NT','IDL','RUSH'].includes(p))return 'DT/EDGE';
-    if(['LB','SAM','MIKE','WILL','MLB','OLB','ILB','LOLB','ROLB'].includes(p))return 'LBs';
-    if(['CB','S','FS','SS','DB','NB','SAF'].includes(p))return 'CB/S';
-    if(['K','PK','P'].includes(p))return 'K/P';
-    return null;
-  }
-  if(typeof fantasyDetail==='function'){
-    const ungroupedFantasyDetail=fantasyDetail;
-    fantasyDetail=function(game){
-      const wrapper=document.createElement('div');
-      wrapper.innerHTML=ungroupedFantasyDetail(game);
-      const containers=wrapper.querySelectorAll('.fantasyversus');
-      const table=containers[containers.length-1];
-      if(!table||!game||!Array.isArray(game.sides)||game.sides.length<2)return wrapper.innerHTML;
-      const originalRows=new Map();
-      let current=null;
-      Array.from(table.children).forEach(node=>{
-        if(node.classList.contains('grouphead')){
-          current=afaMatchGroup(node.textContent.trim());
-        }else if(node.classList.contains('playerline')&&current){
-          if(!originalRows.has(current))originalRows.set(current,[]);
-          originalRows.get(current).push(node);
-        }
-      });
-      const pointsBySide=game.sides.map(side=>{
-        const totals=new Map(afaMatchGroups.map(group=>[group,0]));
-        (side.players||[]).forEach(player=>{
-          const profile=typeof P!=='undefined'?P.find(p=>String(p.id)===String(player.id)):null;
-          const group=afaMatchGroup(profile?(profile.pos||profile.group):'');
-          const score=Number(player.pts);
-          if(group&&player.pts!==null&&player.pts!==undefined&&Number.isFinite(score))
-            totals.set(group,totals.get(group)+score);
-        });
-        return totals;
-      });
-      table.replaceChildren();
-      afaMatchGroups.forEach(group=>{
-        const heading=document.createElement('div');
-        heading.className='grouphead afa-combined-group';
-        const title=document.createElement('span');
-        title.textContent=group;
-        const subtotal=document.createElement('strong');
-        subtotal.className='afa-group-subtotal';
-        subtotal.textContent=game.sides[0].abbr+' '+fmt2(pointsBySide[0].get(group))+'  ·  '+game.sides[1].abbr+' '+fmt2(pointsBySide[1].get(group));
-        heading.append(title,subtotal);
-        table.appendChild(heading);
-        (originalRows.get(group)||[]).forEach(line=>table.appendChild(line));
-      });
-      return wrapper.innerHTML;
-    };
-  }
-  const afaGroupCSS=document.createElement('style');
-  afaGroupCSS.textContent='.fantasyversus .afa-combined-group{flex-wrap:wrap;gap:8px;margin:20px 0 7px}.fantasyversus .afa-combined-group:before,.fantasyversus .afa-combined-group:after{display:none}.afa-group-subtotal{margin-left:auto;color:#dce7f5;font-size:12px;font-weight:800;white-space:normal;text-align:right}.afa-combined-group span{flex:none}@media(max-width:550px){.afa-group-subtotal{width:100%;text-align:center;font-size:11px}}';
-  document.head.appendChild(afaGroupCSS);
-
   // Enhance the existing fantasy-versus view without changing actual game scoring.
   // Each team's side is tinted using the team's recorded primary color.
   if (typeof fantasyDetail === 'function') {
@@ -201,7 +136,7 @@ const enhancement = String.raw`<script>
       result[position].push({id:String(p.id),name:String(p.name||'Unknown'),team:String(p.abbr||p.team||''),games,points:total,ppg:total/games});
     });
     afaPositions.forEach(pos=>{
-      result[pos].sort((a,b)=>b.points-a.points||b.ppg-a.ppg||a.name.localeCompare(b.name)||a.id.localeCompare(b.id));
+      result[pos].sort((a,b)=>b.ppg-a.ppg||b.points-a.points||a.name.localeCompare(b.name)||a.id.localeCompare(b.id));
       result[pos]=result[pos].slice(0,100).map((p,i)=>Object.assign(p,{rank:i+1}));
     });
     return result;
@@ -225,7 +160,7 @@ const enhancement = String.raw`<script>
       return html.replace('<div class="playername">','<div class="afa-pos-rank">'+esc(rank)+'</div><div class="playername">');
     };
   }
-  // Dedicated, position-filtered Top 100 total-points list. Recomputed whenever opened
+  // Dedicated, position-filtered Top 100 PPG list. Recomputed whenever opened
   // so live updates are reflected without updating any stored data.
   function afaShowRankings(selected){
     const ranks=afaRankings();
@@ -233,9 +168,9 @@ const enhancement = String.raw`<script>
     const content=document.getElementById('afa-ppg-content');
     if(!content)return;
     const rows=ranks[position];
-    content.innerHTML='<p class="muted small">Ranked by total fantasy points scored. Players without recorded games are excluded. Rankings use the current live-scored dataset.</p>'+
-      '<div class="afa-ppg-table-wrap"><table class="afa-ppg-table"><thead><tr><th>Rank</th><th>Player</th><th>Team</th><th>GP</th><th>Total points</th><th>PPG</th></tr></thead><tbody>'+
-      (rows.length?rows.map(p=>'<tr><td>#'+p.rank+'</td><td>'+esc(p.name)+'</td><td>'+esc(p.team)+'</td><td>'+p.games+'</td><td><strong>'+p.points.toFixed(2)+'</strong></td><td>'+p.ppg.toFixed(2)+'</td></tr>').join(''):'<tr><td colspan="6">No recorded games for this position.</td></tr>')+
+    content.innerHTML='<p class="muted small">Ranked by fantasy points per recorded game (total points ÷ games played). Players without recorded games are excluded. Rankings use the current live-scored dataset.</p>'+
+      '<div class="afa-ppg-table-wrap"><table class="afa-ppg-table"><thead><tr><th>Rank</th><th>Player</th><th>Team</th><th>GP</th><th>Points</th><th>PPG</th></tr></thead><tbody>'+
+      (rows.length?rows.map(p=>'<tr><td>#'+p.rank+'</td><td>'+esc(p.name)+'</td><td>'+esc(p.team)+'</td><td>'+p.games+'</td><td>'+p.points.toFixed(2)+'</td><td><strong>'+p.ppg.toFixed(2)+'</strong></td></tr>').join(''):'<tr><td colspan="6">No recorded games for this position.</td></tr>')+
       '</tbody></table></div>';
     document.querySelectorAll('.afa-ppg-position').forEach(b=>b.classList.toggle('active',b.dataset.position===position));
   }
@@ -244,7 +179,7 @@ const enhancement = String.raw`<script>
     if(!panel){
       panel=document.createElement('div');
       panel.id='afa-ppg-panel';
-      panel.innerHTML='<div class="afa-ppg-dialog" role="dialog" aria-modal="true" aria-label="Top 100 fantasy total-points rankings"><button type="button" class="afa-ppg-close" aria-label="Close rankings">✕</button><h2>Top 100 Players by Position</h2><div class="afa-ppg-positions"></div><div id="afa-ppg-content"></div></div>';
+      panel.innerHTML='<div class="afa-ppg-dialog" role="dialog" aria-modal="true" aria-label="Top 100 fantasy PPG rankings"><button type="button" class="afa-ppg-close" aria-label="Close rankings">✕</button><h2>Top 100 Players by Position</h2><div class="afa-ppg-positions"></div><div id="afa-ppg-content"></div></div>';
       document.body.appendChild(panel);
       panel.querySelector('.afa-ppg-close').addEventListener('click',()=>panel.classList.remove('show'));
       panel.addEventListener('click',e=>{if(e.target===panel)panel.classList.remove('show');});
@@ -261,7 +196,7 @@ const enhancement = String.raw`<script>
   }
   const afaRankButton=document.createElement('button');
   afaRankButton.type='button';
-  afaRankButton.textContent='Top 100 Points';
+  afaRankButton.textContent='Top 100 PPG';
   afaRankButton.className='afa-ppg-trigger';
   afaRankButton.addEventListener('click',afaOpenRankings);
   const afaNav=document.querySelector('header nav')||document.querySelector('nav')||document.querySelector('header');
@@ -321,57 +256,6 @@ const enhancement = String.raw`<script>
     return rows;
   };
   document.addEventListener('click',e=>{if(e.target.closest('.teamcard'))sort='position';},true);
-
-  // Give every team a dedicated schedule/results page using the exact Score Hub.
-  // Reuse openScoreHub() so all Fantasy Stats, Team Stats and Recap tabs stay identical.
-  let afaTeamId=null;
-  function afaTeamPage(id){
-    const chosen=T.find(t=>String(t.id)===String(id));
-    if(!chosen){afaTeamId=null;return;}
-    const games=(D.scores||[]).filter(g=>(g.sides||[]).some(side=>String(side.tid)===String(chosen.id)))
-      .slice().sort((a,b)=>Number(a.week)-Number(b.week)||String(a.id).localeCompare(String(b.id)));
-    const view=document.getElementById('view');
-    if(!view)return;
-    view.innerHTML='<div class="afa-team-header"><button class="btn" type="button" onclick="afaBackToTeams()">← All Teams</button>'+
-      '<div class="afa-team-title">'+(chosen.logo?'<img src="'+esc(chosen.logo)+'" alt="" onerror="this.style.display=\'none\'">':'')+
-      '<div><h2>'+esc(chosen.name)+'</h2><p class="muted">'+chosen.w+'-'+chosen.l+' · '+games.length+' scheduled/recorded games</p></div></div>'+
-      '<button class="btn" type="button" onclick="afaTeamRoster()">View Roster</button></div>'+
-      '<h3>Game Hubs</h3><p class="muted small">Select any matchup to open the same game hub from Scores.</p>'+
-      '<div class="scoregrid">'+games.map(g=>'<button class="matchcard" type="button" onclick="openScoreHub(\''+esc(g.id)+'\')">'+
-        '<div class="matchtop"><span>WEEK '+g.week+(g.conf?' · CONFERENCE':'')+'</span><span>'+(g.played?'FINAL':'SCHEDULED')+'</span></div>'+
-        g.sides.map(side=>'<div class="matchside '+(isWinner(g,side)?'win':'')+'">'+safeLogo(side)+'<strong>'+esc(side.name)+'</strong><span class="points">'+(g.played?(side.score??'—'):'—')+'</span></div>').join('')+
-        (g.played?'<div class="teamfp"><span>Fantasy pts · '+esc(g.sides[0].abbr)+' '+fmt2(g.sides[0].fantasyTotal)+'</span><span>'+esc(g.sides[1].abbr)+' '+fmt2(g.sides[1].fantasyTotal)+'</span></div>':'<div class="teamfp">Box score not recorded yet</div>')+
-        '</button>').join('')+'</div>'+
-      (games.length?'':'<p class="empty">No recorded or scheduled games found for this team.</p>');
-  }
-  // Assign functions globally because team-page buttons are built with inline handlers.
-  window.afaBackToTeams=function(){afaTeamId=null;render();};
-  window.afaTeamRoster=function(){team=afaTeamId;afaTeamId=null;tab='players';query='';pos='ALL';render();};
-  const afaRenderTeams=render;
-  render=function(){
-    afaRenderTeams();
-    if(tab!=='teams')return;
-    if(afaTeamId!==null)afaTeamPage(afaTeamId);
-  };
-  document.addEventListener('click',event=>{
-    const teamsNav=event.target.closest('nav button[data-tab="teams"]');
-    if(teamsNav){afaTeamId=null;return;}
-    if(tab!=='teams'||afaTeamId!==null)return;
-    const card=event.target.closest('#teamgrid .teamcard');
-    if(!card)return;
-    const cards=Array.from(document.querySelectorAll('#teamgrid .teamcard'));
-    const ordered=T.slice().sort((a,b)=>a.name.localeCompare(b.name));
-    const chosen=ordered[cards.indexOf(card)];
-    if(!chosen)return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    afaTeamId=chosen.id;
-    render();
-  },true);
-  const afaTeamStyle=document.createElement('style');
-  afaTeamStyle.textContent='.afa-team-header{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:10px 0 22px}.afa-team-title{display:flex;align-items:center;gap:15px;flex:1;min-width:200px}.afa-team-title img{width:64px;height:64px;object-fit:contain}.afa-team-title h2{margin:0}.afa-team-title p{margin:5px 0}.afa-team-header + h3{margin-top:22px}';
-  document.head.appendChild(afaTeamStyle);
-
 })();
 </script>`;
 export async function onRequest(context) {
