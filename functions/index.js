@@ -71,7 +71,8 @@ const enhancement = String.raw`<script>
         return readableColor(team && team.color);
       });
       container.querySelectorAll('.playerline').forEach(line => {
-        const scoreSpans = line.querySelectorAll('.fantasyscore > span');
+        const scoreBox = line.querySelector('.fantasyscore');
+        const scoreSpans = scoreBox ? scoreBox.querySelectorAll(':scope > span') : [];
         ['left','right'].forEach((sideName,index) => {
           const side = line.querySelector('.' + sideName);
           if (!side) return;
@@ -80,6 +81,11 @@ const enhancement = String.raw`<script>
           side.classList.add('afa-team-side');
           const sub = side.querySelector('.substats');
           const score = scoreSpans[index];
+          // Keep the player information and score together within one team-color panel.
+          const info = document.createElement('div');
+          info.className = 'afa-player-info';
+          while (side.firstChild) info.appendChild(side.firstChild);
+          side.appendChild(info);
           if (!score || !score.textContent.trim()) return;
           const points = sub && sub.getAttribute('data-afa-total');
           const scoreText = score.textContent;
@@ -92,11 +98,14 @@ const enhancement = String.raw`<script>
           if (points && points !== '—') {
             const cumulative = document.createElement('span');
             cumulative.className = 'afa-season-points';
-            cumulative.textContent = 'TOTAL ' + points;
+            cumulative.textContent = points;
             cumulative.title = 'Fantasy points accumulated through week ' + game.week;
             score.appendChild(cumulative);
           }
+          // Both numbers now live inside the colored panel, not the middle column.
+          side.appendChild(score);
         });
+        if (scoreBox) scoreBox.remove();
       });
       return container.innerHTML;
     };
@@ -104,15 +113,21 @@ const enhancement = String.raw`<script>
   // Responsive two-sided game rows with subdued team-color backgrounds.
   const afaStyle = document.createElement('style');
   afaStyle.textContent = [
-    '.playerline .afa-team-side{background:linear-gradient(135deg,color-mix(in srgb,var(--afa-team-color) 32%,#131b30),color-mix(in srgb,var(--afa-team-color) 17%,#131b30));padding:10px 8px;border-radius:9px;min-width:0;}',
+    '.gamewide .gamehero{grid-template-columns:minmax(0,1fr) 28px minmax(0,1fr);gap:4px;overflow:hidden;}',
+    '.gamewide .gamehero .sideblock{min-width:0;max-width:100%;overflow:hidden;}',
+    '.gamewide .gamehero .sidelogo,.gamewide .gamehero img.sidelogo{display:block;width:56px!important;height:56px!important;max-width:56px!important;max-height:56px!important;object-fit:contain!important;flex:none;}',
+    '.gamewide .gamehero .teamlabel{overflow-wrap:anywhere;}',
+    '.fantasyversus .playerline{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:7px;padding:7px 0;}',
+    '.playerline .afa-team-side{display:flex;align-items:center;justify-content:space-between;gap:6px;min-width:0;min-height:76px;background:linear-gradient(135deg,color-mix(in srgb,var(--afa-team-color) 32%,#131b30),color-mix(in srgb,var(--afa-team-color) 17%,#131b30));padding:10px 8px;border-radius:9px;}',
     '.playerline .afa-team-side.left{border-left:3px solid var(--afa-team-color);}',
-    '.playerline .afa-team-side.right{border-right:3px solid var(--afa-team-color);}',
-    '.playerline .afa-team-side .playername{color:#fff;text-shadow:0 1px 2px #000a;}',
-    '.playerline .afa-team-side .substats{color:#d4deee;font-weight:600;overflow-wrap:normal;white-space:normal;}',
-    '.playerline .fantasyscore{align-items:center;gap:3px;}',
-    '.playerline .fantasyscore .afa-scorecell{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:0;gap:3px;font-size:inherit;font-weight:900;}',
-    '.playerline .afa-season-points{font-size:9px;line-height:1.2;letter-spacing:0;color:#aebed6;font-weight:700;white-space:nowrap;}',
-    '@media(max-width:550px){.playerline{grid-template-columns:minmax(0,1fr) 100px minmax(0,1fr);gap:4px;}.playerline .afa-team-side{padding:9px 5px;}.playerline .fantasyscore{font-size:13px;gap:2px;}.playerline .afa-season-points{font-size:8px;letter-spacing:0;}.playerline .afa-team-side .playername{font-size:11px;}}'
+    '.playerline .afa-team-side.right{border-right:3px solid var(--afa-team-color);flex-direction:row-reverse;}',
+    '.playerline .afa-team-side .afa-player-info{min-width:0;flex:1;}',
+    '.playerline .afa-team-side .playername{color:#fff;text-shadow:0 1px 2px #000a;overflow-wrap:anywhere;}',
+    '.playerline .afa-team-side .substats{color:#d4deee;font-weight:600;white-space:normal;}',
+    '.playerline .afa-scorecell{display:flex;flex:none;flex-direction:column;justify-content:center;align-items:center;min-width:45px;gap:4px;line-height:1.15;color:#fff;font-weight:900;}',
+    '.playerline .afa-week-points{font-size:16px;white-space:nowrap;}',
+    '.playerline .afa-season-points{font-size:11px;line-height:1.2;color:#b9cce5;font-weight:650;white-space:nowrap;}',
+    '@media(max-width:550px){.gamewide .gamehero .sidelogo,.gamewide .gamehero img.sidelogo{width:44px!important;height:44px!important;max-width:44px!important;max-height:44px!important;}.gamewide .gamehero{padding:12px 6px;}.gamewide .gamehero .bigscore{font-size:25px;}.fantasyversus .playerline{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:5px;}.playerline .afa-team-side{padding:8px 5px;gap:3px;min-height:68px;}.playerline .afa-team-side .playername{font-size:11px;}.playerline .afa-team-side .substats{font-size:9px;}.playerline .afa-scorecell{min-width:37px;gap:3px;}.playerline .afa-week-points{font-size:13px;}.playerline .afa-season-points{font-size:9px;}}'
   ].join('');
   document.head.appendChild(afaStyle);
   const order = ['QB','HB','WR','TE','OL','DT','EDGE','LB','CB','S','K','P','OTHER'];
