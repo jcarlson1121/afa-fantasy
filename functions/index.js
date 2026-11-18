@@ -1,6 +1,28 @@
 // Position-ordered team rosters. Kept separate from the large snapshot HTML.
 const enhancement = String.raw`<script>
 (() => {
+  // Live scoring configuration: changes affect rulesFor() before API data is scored.
+  // Passing completions/attempts are neutral; WR and non-WR drops are neutral.
+  if (typeof D !== 'undefined' && D.meta && D.meta.rules) {
+    Object.assign(D.meta.rules.passing, {cmp:0, att:0});
+    Object.assign(D.meta.rules.rushing, {bt:0.2});
+    Object.assign(D.meta.rules.receiving, {drops:0, wrDrops:0});
+    Object.assign(D.meta.rules.defense, {soloTkl:1.5, astTkl:0.5, tfl:2.25, pd:2});
+    Object.assign(D.meta.rules.blocking, {sacksAllowed:-2});
+  }
+  // The base HTML includes a hard-coded old-rule note; keep it synchronized.
+  if (typeof render === 'function') {
+    const baseRender=render;
+    render=function(){
+      baseRender();
+      if(typeof tab!=='undefined' && tab==='rules'){
+        const panels=[...document.querySelectorAll('#view .note')];
+        const oldNote=panels.find(el=>el.textContent.includes('Solo tackle: +1.2'));
+        if(oldNote) oldNote.textContent='Updated AFA scoring: completions 0; pass attempts 0; broken tackles +0.2; all receiving drops 0; solo tackles +1.5; assisted tackles +0.5; tackles for loss +2.25; pass deflections +2; sacks allowed -2. Pancake blocks remain +1.8, defensive interceptions +6, and passing interceptions -2. Fantasy points are recalculated from the live game box scores whenever a live sync succeeds.';
+      }
+    };
+    if(typeof tab!=='undefined' && tab==='rules')render();
+  }
   const order = ['QB','HB','WR','TE','OL','DT','EDGE','LB','CB','S','K','P','OTHER'];
   function group(position) {
     const p=String(position||'').toUpperCase().trim().replace(/[.\s_-]+/g,'');
