@@ -144,7 +144,7 @@ const enhancement = String.raw`<script>
   function afaRankFor(player){
     const pos=afaPositionOf(player);
     const record=afaRankings()[pos].find(p=>p.id===String(player.id));
-    return record?'#'+record.rank+' '+pos+' BY PPG':'UNRANKED '+pos+' BY PPG';
+    return record?'#'+record.rank:'';
   }
   // Display each eligible player's position rank directly above their name
   // in Scores > Fantasy Stats, without changing their weekly or season scores.
@@ -156,6 +156,7 @@ const enhancement = String.raw`<script>
       const player=P.find(p=>String(p.id)===String(entry.id));
       if(!player)return html;
       const rank=afaRankFor(player);
+      if(!rank)return html;
       return html.replace('<div class="playername">','<div class="afa-pos-rank">'+esc(rank)+'</div><div class="playername">');
     };
   }
