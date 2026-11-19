@@ -327,6 +327,62 @@ const enhancement = String.raw`<script>
     return {metrics,offRankedTeams:offense.length,defRankedTeams:defense.length};
   }
   const afaFmtRealYPG=v=>v==null?'—':v.toFixed(1);
+
+  // Team-specific Top 100 players. Keep the canonical leaderboard's total-points
+  // rankings, but display players in on-field positional order, not score order.
+  function afaTeamRankedPlayers(teamId){
+    const rankedByPlayer=new Map();
+    const leaderboard=afaRankings();
+    for(const ranks of Object.values(leaderboard)){
+      for(const item of ranks)rankedByPlayer.set(String(item.id),item.rank);
+    }
+    const offOrder=['QB','HB','FB','WR','TE','OL'];
+    const defOrder=['DL','LB','CB','S','K','P'];
+    const offense=[],defense=[];
+    function position(player){
+      const raw=String(player.pos||player.group||'').trim().toUpperCase().replace(/[\s._-]+/g,'');
+      if(raw==='QB')return 'QB';
+      if(['HB','RB','TB'].includes(raw))return 'HB';
+      if(raw==='FB')return 'FB';
+      if(['WR','SLOT'].includes(raw))return 'WR';
+      if(raw==='TE')return 'TE';
+      if(['OL','LT','LG','C','RG','RT','OT','OG','T','G'].includes(raw))return 'OL';
+      if(['DT','NT','IDL','EDGE','LE','RE','DE','LEDG','REDG','RUSH'].includes(raw))return 'DL';
+      if(['LB','LOLB','ROLB','MLB','OLB','ILB','SAM','MIKE','WILL'].includes(raw))return 'LB';
+      if(['CB','NB','DB'].includes(raw))return 'CB';
+      if(['S','FS','SS','SAF'].includes(raw))return 'S';
+      if(['K','PK'].includes(raw))return 'K';
+      if(raw==='P')return 'P';
+      // Live source can provide broad position groups instead of individual slots.
+      const mapped=afaPositionOf(player);
+      if(mapped==='DT'||mapped==='EDGE')return 'DL';
+      return mapped==='OTHER'?null:mapped;
+    }
+    for(const player of P){
+      if(String(player.tid)!==String(teamId))continue;
+      const rank=rankedByPlayer.get(String(player.id));
+      if(rank===undefined)continue;
+      const pos=position(player);
+      if(!pos)continue;
+      const item={id:String(player.id),name:player.name||'Unknown',pos,rank};
+      if(offOrder.includes(pos))offense.push(item);
+      else if(defOrder.includes(pos))defense.push(item);
+    }
+    function order(list,groups){
+      return list.sort((a,b)=>groups.indexOf(a.pos)-groups.indexOf(b.pos)||a.name.localeCompare(b.name)||a.id.localeCompare(b.id));
+    }
+    function html(list,groups){
+      if(!list.length)return '<p class="muted small afa-team-no-top">No Top 100 players yet</p>';
+      return order(list,groups).map(p=>
+        '<button class="afa-team-ranked-player" type="button" data-afa-player="'+esc(p.id)+'">'+
+          '<span class="afa-team-ranked-position">'+esc(p.pos)+'</span>'+
+          '<span class="afa-team-ranked-name">'+esc(p.name)+'</span>'+
+          '<span class="afa-team-ranked-number">#'+p.rank+'</span>'+
+        '</button>'
+      ).join('');
+    }
+    return {offense:html(offense,offOrder),defense:html(defense,defOrder)};
+  }
   function afaTeamHub(){
     const t=T.find(t=>String(t.id)===String(afaSelectedTeam));
     if(!t){afaSelectedTeam=null;return;}
@@ -337,6 +393,7 @@ const enhancement = String.raw`<script>
     const rankText=rank=>rank==null?'—':'#'+rank;
     const color=/^#[0-9a-fA-F]{6}$/.test(String(t.color||''))?t.color:'#344968';
     const rosterCount=P.filter(p=>String(p.tid)===String(t.id)).length;
+    const top=afaTeamRankedPlayers(t.id);
     const view=document.getElementById('view');
     if(!view)return;
     view.innerHTML=
@@ -351,9 +408,11 @@ const enhancement = String.raw`<script>
         '</div>'+
         '<div class="afa-team-metric-grid">'+
           '<div class="afa-team-metric"><span>OFFENSE · YARDS / GAME</span><strong>'+afaFmtRealYPG(m.offense)+'</strong>'+
-            '<div class="afa-team-ranking">'+rankText(m.offRank)+'</div></div>'+
+            '<div class="afa-team-ranking">'+rankText(m.offRank)+'</div>'+
+            '<div class="afa-team-top-list"><h4>Top 100 Players</h4>'+top.offense+'</div></div>'+
           '<div class="afa-team-metric"><span>DEFENSE · YARDS ALLOWED / GAME</span><strong>'+afaFmtRealYPG(m.defense)+'</strong>'+
-            '<div class="afa-team-ranking">'+rankText(m.defRank)+'</div></div>'+
+            '<div class="afa-team-ranking">'+rankText(m.defRank)+'</div>'+
+            '<div class="afa-team-top-list"><h4>Top 100 Players</h4>'+top.defense+'</div></div>'+
         '</div>'+
         '<p class="muted small afa-team-explain">Actual football yards, not fantasy points. Offense = yards gained ÷ completed games with offensive yardage; defense = opponents’ yards gained ÷ completed games with opponent yardage. Games without those team stats are excluded from that average. Lower is better for defense.</p>'+
         '<div class="afa-team-hub-actions"><button class="btn" type="button" data-afa-action="roster">View roster · '+rosterCount+' players</button></div>'+
@@ -381,6 +440,8 @@ const enhancement = String.raw`<script>
     if(back){e.preventDefault();afaSelectedTeam=null;tab='teams';render();return;}
     const roster=e.target.closest('[data-afa-action="roster"]');
     if(roster){e.preventDefault();team=String(afaSelectedTeam);afaSelectedTeam=null;tab='players';pos='ALL';query='';render();return;}
+    const player=e.target.closest('[data-afa-player]');
+    if(player){e.preventDefault();openPlayer(player.getAttribute('data-afa-player'));return;}
     const game=e.target.closest('[data-afa-game]');
     if(game){e.preventDefault();openScoreHub(game.getAttribute('data-afa-game'));return;}
     if(tab!=='teams'||afaSelectedTeam!==null)return;
@@ -409,6 +470,14 @@ const enhancement = String.raw`<script>
     '.afa-team-metric>span{font-size:12px;color:#a5b8d4;font-weight:800;letter-spacing:.03em;}',
     '.afa-team-metric>strong{display:block;font-size:35px;line-height:1.3;margin:7px 0;color:#f1f6ff;}',
     '.afa-team-ranking{color:#e6bb58;font-size:13px;font-weight:800;}',
+    '.afa-team-top-list{margin-top:15px;border-top:1px solid #42506a;padding-top:12px;}',
+    '.afa-team-top-list h4{font-size:12px;font-weight:800;letter-spacing:.035em;margin:0 0 9px;color:#dce5f3;}',
+    '.afa-team-ranked-player{width:100%;display:flex;align-items:center;gap:8px;padding:8px 3px;border:0;border-bottom:1px solid #ffffff14;background:transparent;text-align:left;color:#eaf1fb;cursor:pointer;font-size:13px;}',
+    '.afa-team-ranked-player:hover{background:#ffffff0b;}',
+    '.afa-team-ranked-position{flex:none;min-width:30px;color:#a9b9ce;font-weight:700;font-size:11px;}',
+    '.afa-team-ranked-name{flex:1;min-width:0;overflow-wrap:anywhere;font-weight:650;}',
+    '.afa-team-ranked-number{flex:none;color:#e6bb58;font-weight:900;}',
+    '.afa-team-no-top{margin:4px 0 0;}',
     '.afa-team-explain{margin:0;line-height:1.5;}',
     '.afa-team-hub-actions{display:flex;gap:10px;flex-wrap:wrap;}',
     '.afa-team-hub-section h3{margin:8px 0;}',
