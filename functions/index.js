@@ -256,6 +256,125 @@ const enhancement = String.raw`<script>
     return rows;
   };
   document.addEventListener('click',e=>{if(e.target.closest('.teamcard'))sort='position';},true);
+
+  // Team hubs: actual football points scored/allowed per completed game.
+  // Live-safe and entirely client-side. No extra requests or scoring changes.
+  let afaSelectedTeam=null;
+  function afaBuildTeamMetrics(){
+    const metrics=new Map(T.map(t=>[String(t.id),{id:String(t.id),games:0,for:0,against:0,offense:null,defense:null,offRank:null,defRank:null}]));
+    for(const game of (D.scores||[])){
+      if(!game.played||!Array.isArray(game.sides)||game.sides.length!==2)continue;
+      const [a,b]=game.sides;
+      const aScore=Number(a.score),bScore=Number(b.score);
+      if(!Number.isFinite(aScore)||!Number.isFinite(bScore)||a.score==null||b.score==null)continue;
+      for(const [side,pointsFor,pointsAgainst] of [[a,aScore,bScore],[b,bScore,aScore]]){
+        const m=metrics.get(String(side.tid));
+        if(!m)continue;
+        m.games++;
+        m.for+=pointsFor;
+        m.against+=pointsAgainst;
+      }
+    }
+    const active=Array.from(metrics.values()).filter(m=>m.games>0);
+    active.forEach(m=>{m.offense=m.for/m.games;m.defense=m.against/m.games});
+    const offense=active.slice().sort((a,b)=>b.offense-a.offense||a.id.localeCompare(b.id));
+    const defense=active.slice().sort((a,b)=>a.defense-b.defense||a.id.localeCompare(b.id));
+    // Competition ranking: tied PPG values receive the same league rank.
+    offense.forEach((m,i)=>m.offRank=i>0&&Math.abs(m.offense-offense[i-1].offense)<1e-9?offense[i-1].offRank:i+1);
+    defense.forEach((m,i)=>m.defRank=i>0&&Math.abs(m.defense-defense[i-1].defense)<1e-9?defense[i-1].defRank:i+1);
+    return {metrics,rankedTeams:active.length};
+  }
+  const afaFmtRealPPG=v=>v==null?'—':v.toFixed(1);
+  function afaTeamHub(){
+    const t=T.find(t=>String(t.id)===String(afaSelectedTeam));
+    if(!t){afaSelectedTeam=null;return;}
+    const {metrics,rankedTeams}=afaBuildTeamMetrics();
+    const m=metrics.get(String(t.id));
+    const games=(D.scores||[]).filter(g=>Array.isArray(g.sides)&&g.sides.some(s=>String(s.tid)===String(t.id)))
+      .slice().sort((a,b)=>Number(a.week)-Number(b.week)||String(a.id).localeCompare(String(b.id)));
+    const ranked=m.games>0;
+    const rankText=rank=>rank==null?'Not yet ranked':'#'+rank+' of '+rankedTeams;
+    const color=/^#[0-9a-fA-F]{6}$/.test(String(t.color||''))?t.color:'#344968';
+    const rosterCount=P.filter(p=>String(p.tid)===String(t.id)).length;
+    const view=document.getElementById('view');
+    if(!view)return;
+    view.innerHTML=
+      '<div class="afa-team-hub">'+
+        '<div class="afa-team-hero" style="--afa-hub-color:'+color+'">'+
+          '<button type="button" class="btn" data-afa-action="back">← All Teams</button>'+
+          '<div class="afa-team-ident">'+
+            (t.logo?'<img src="'+esc(t.logo)+'" alt="" onerror="this.style.display=\'none\'">':'')+
+            '<div><p class="muted small">AFA TEAM INTELLIGENCE · 2025 SEASON</p><h2>'+esc(t.name)+'</h2>'+
+              '<p>'+esc(t.abbr)+' · '+t.w+'–'+t.l+' · '+m.games+' completed game'+(m.games===1?'':'s')+'</p></div>'+
+          '</div>'+
+        '</div>'+
+        '<div class="afa-team-metric-grid">'+
+          '<div class="afa-team-metric"><span>OFFENSE · ACTUAL PPG</span><strong>'+afaFmtRealPPG(m.offense)+'</strong>'+
+            '<div class="afa-team-ranking">'+rankText(m.offRank)+' · most points scored</div></div>'+
+          '<div class="afa-team-metric"><span>DEFENSE · ACTUAL PPG ALLOWED</span><strong>'+afaFmtRealPPG(m.defense)+'</strong>'+
+            '<div class="afa-team-ranking">'+rankText(m.defRank)+' · fewest points allowed</div></div>'+
+        '</div>'+
+        '<p class="muted small afa-team-explain">Actual football points, not fantasy points. Offense = points scored ÷ completed games; defense = opponents’ points ÷ completed games. Unplayed matchups are excluded. Lower is better for defense.</p>'+
+        '<div class="afa-team-hub-actions"><button class="btn" type="button" data-afa-action="roster">View roster · '+rosterCount+' players</button></div>'+
+        '<div class="afa-team-hub-section"><h3>Game Hubs</h3><p class="muted small">Open any matchup for Fantasy Stats, Team Stats or Game Recap.</p>'+
+        '<div class="scoregrid">'+games.map(g=>{
+          const a=g.sides[0],b=g.sides[1];
+          return '<button type="button" class="matchcard" data-afa-game="'+esc(g.id)+'">'+
+            '<div class="matchtop"><span>WEEK '+g.week+(g.conf?' · CONFERENCE':'')+'</span><span>'+(g.played?'FINAL':'SCHEDULED')+'</span></div>'+
+            [a,b].map(s=>'<div class="matchside '+(isWinner(g,s)?'win':'')+'">'+safeLogo(s)+'<strong>'+esc(s.name)+'</strong><span class="points">'+(g.played?(s.score??'—'):'—')+'</span></div>').join('')+
+            (g.played?'<div class="teamfp"><span>Fantasy pts · '+esc(a.abbr)+' '+fmt2(a.fantasyTotal)+'</span><span>'+esc(b.abbr)+' '+fmt2(b.fantasyTotal)+'</span></div>':'<div class="teamfp">Box score not recorded yet</div>')+
+          '</button>';
+        }).join('')+'</div>'+(games.length?'':'<div class="empty">No games scheduled or recorded.</div>')+'</div>'+
+      '</div>';
+  }
+  // Keep all previous rendering, including scores, player pages and scoring rules.
+  const afaRenderBeforeTeamHub=render;
+  render=function(){
+    afaRenderBeforeTeamHub();
+    if(tab==='teams'&&afaSelectedTeam!==null)afaTeamHub();
+  };
+  document.addEventListener('click',e=>{
+    const nav=e.target.closest('nav button[data-tab="teams"]');
+    if(nav){afaSelectedTeam=null;return;}
+    const back=e.target.closest('[data-afa-action="back"]');
+    if(back){e.preventDefault();afaSelectedTeam=null;tab='teams';render();return;}
+    const roster=e.target.closest('[data-afa-action="roster"]');
+    if(roster){e.preventDefault();team=String(afaSelectedTeam);afaSelectedTeam=null;tab='players';pos='ALL';query='';render();return;}
+    const game=e.target.closest('[data-afa-game]');
+    if(game){e.preventDefault();openScoreHub(game.getAttribute('data-afa-game'));return;}
+    if(tab!=='teams'||afaSelectedTeam!==null)return;
+    const card=e.target.closest('#teamgrid .teamcard');
+    if(!card)return;
+    // Stop the old inline handler that sends team clicks to the Players directory.
+    e.preventDefault();e.stopImmediatePropagation();
+    const cards=Array.from(document.querySelectorAll('#teamgrid .teamcard'));
+    const teamIndex=cards.indexOf(card);
+    const sorted=T.slice().sort((a,b)=>a.name.localeCompare(b.name));
+    if(teamIndex<0||!sorted[teamIndex])return;
+    afaSelectedTeam=String(sorted[teamIndex].id);
+    render();
+  },true);
+  const afaTeamHubCSS=document.createElement('style');
+  afaTeamHubCSS.textContent=[
+    '.afa-team-hub{display:flex;flex-direction:column;gap:16px;}',
+    '.afa-team-hero{padding:20px;border-radius:14px;border:1px solid #ffffff28;background:linear-gradient(115deg,color-mix(in srgb,var(--afa-hub-color) 65%,#131b30),color-mix(in srgb,var(--afa-hub-color) 25%,#131b30));}',
+    '.afa-team-hero>.btn{margin-bottom:18px;}',
+    '.afa-team-ident{display:flex;align-items:center;gap:16px;flex-wrap:wrap;}',
+    '.afa-team-ident img{width:80px;height:80px;object-fit:contain;}',
+    '.afa-team-ident h2{margin:4px 0 8px;}',
+    '.afa-team-ident p{margin:4px 0;}',
+    '.afa-team-metric-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}',
+    '.afa-team-metric{background:#1d263b;border:1px solid #3a4862;border-radius:12px;padding:18px;min-width:0;}',
+    '.afa-team-metric>span{font-size:12px;color:#a5b8d4;font-weight:800;letter-spacing:.03em;}',
+    '.afa-team-metric>strong{display:block;font-size:35px;line-height:1.3;margin:7px 0;color:#f1f6ff;}',
+    '.afa-team-ranking{color:#b5f875;font-size:13px;font-weight:800;}',
+    '.afa-team-explain{margin:0;line-height:1.5;}',
+    '.afa-team-hub-actions{display:flex;gap:10px;flex-wrap:wrap;}',
+    '.afa-team-hub-section h3{margin:8px 0;}',
+    '@media(max-width:550px){.afa-team-metric-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}.afa-team-metric{padding:12px;}.afa-team-metric>strong{font-size:29px;}.afa-team-metric>span{font-size:10px;}.afa-team-ranking{font-size:11px;}.afa-team-ident img{width:55px;height:55px;}}'
+  ].join('');
+  document.head.appendChild(afaTeamHubCSS);
+
 })();
 </script>`;
 export async function onRequest(context) {
