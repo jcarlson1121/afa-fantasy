@@ -351,9 +351,9 @@ const enhancement = String.raw`<script>
         '</div>'+
         '<div class="afa-team-metric-grid">'+
           '<div class="afa-team-metric"><span>OFFENSE · YARDS / GAME</span><strong>'+afaFmtRealYPG(m.offense)+'</strong>'+
-            '<div class="afa-team-ranking">'+rankText(m.offRank)</div></div>'+
+            '<div class="afa-team-ranking">'+rankText(m.offRank)+'</div></div>'+
           '<div class="afa-team-metric"><span>DEFENSE · YARDS ALLOWED / GAME</span><strong>'+afaFmtRealYPG(m.defense)+'</strong>'+
-            '<div class="afa-team-ranking">'+rankText(m.defRank)</div></div>'+
+            '<div class="afa-team-ranking">'+rankText(m.defRank)+'</div></div>'+
         '</div>'+
         '<p class="muted small afa-team-explain">Actual football yards, not fantasy points. Offense = yards gained ÷ completed games with offensive yardage; defense = opponents’ yards gained ÷ completed games with opponent yardage. Games without those team stats are excluded from that average. Lower is better for defense.</p>'+
         '<div class="afa-team-hub-actions"><button class="btn" type="button" data-afa-action="roster">View roster · '+rosterCount+' players</button></div>'+
