@@ -129,14 +129,14 @@ const enhancement = String.raw`<script>
     afaPositions.forEach(pos=>result[pos]=[]);
     if(typeof P==='undefined'||!Array.isArray(P))return result;
     P.forEach(p=>{
-      const games=Number(p.gp);
+      const games=typeof teamGP==='function'?Number(teamGP(p)):Number((typeof teamPlayedGames!=='undefined'&&teamPlayedGames[String(p.tid)])||0);
       const total=Number(p.points);
       if(!Number.isFinite(games)||games<=0||!Number.isFinite(total))return;
       const position=afaPositionOf(p);
       result[position].push({id:String(p.id),name:String(p.name||'Unknown'),team:String(p.abbr||p.team||''),games,points:total,ppg:total/games});
     });
     afaPositions.forEach(pos=>{
-      result[pos].sort((a,b)=>b.points-a.points||b.ppg-a.ppg||a.name.localeCompare(b.name)||a.id.localeCompare(b.id));
+      result[pos].sort((a,b)=>b.ppg-a.ppg||b.points-a.points||a.name.localeCompare(b.name)||a.id.localeCompare(b.id));
       result[pos]=result[pos].slice(0,100).map((p,i)=>Object.assign(p,{rank:i+1}));
     });
     return result;
@@ -160,7 +160,7 @@ const enhancement = String.raw`<script>
       return html.replace('<div class="playername">','<div class="afa-pos-rank">'+esc(rank)+'</div><div class="playername">');
     };
   }
-  // Dedicated, position-filtered Top 100 total-points list. Recomputed whenever opened
+  // Dedicated, position-filtered Top 100 team-game-denominator PPG list. Recomputed whenever opened
   // so live updates are reflected without updating any stored data.
   function afaShowRankings(selected){
     const ranks=afaRankings();
@@ -168,9 +168,9 @@ const enhancement = String.raw`<script>
     const content=document.getElementById('afa-ppg-content');
     if(!content)return;
     const rows=ranks[position];
-    content.innerHTML='<p class="muted small">Ranked by total fantasy points scored. Players without recorded games are excluded. Rankings use the current live-scored dataset.</p>'+
-      '<div class="afa-ppg-table-wrap"><table class="afa-ppg-table"><thead><tr><th>Rank</th><th>Player</th><th>Team</th><th>GP</th><th>Total points</th><th>PPG</th></tr></thead><tbody>'+
-      (rows.length?rows.map(p=>'<tr><td>#'+p.rank+'</td><td>'+esc(p.name)+'</td><td>'+esc(p.team)+'</td><td>'+p.games+'</td><td><strong>'+p.points.toFixed(2)+'</strong></td><td>'+p.ppg.toFixed(2)+'</td></tr>').join(''):'<tr><td colspan="6">No recorded games for this position.</td></tr>')+
+    content.innerHTML='<p class="muted small">Ranked by fantasy points per team game (total fantasy points ÷ games played by the player’s team). Every completed team game counts for every rostered player, including games without individual stats. Teams without completed games are excluded.</p>'+
+      '<div class="afa-ppg-table-wrap"><table class="afa-ppg-table"><thead><tr><th>Rank</th><th>Player</th><th>Team</th><th>Team GP</th><th>Total points</th><th>PPG</th></tr></thead><tbody>'+
+      (rows.length?rows.map(p=>'<tr><td>#'+p.rank+'</td><td>'+esc(p.name)+'</td><td>'+esc(p.team)+'</td><td>'+p.games+'</td><td>'+p.points.toFixed(2)+'</td><td><strong>'+p.ppg.toFixed(2)+'</strong></td></tr>').join(''):'<tr><td colspan="6">No players from teams with completed games for this position.</td></tr>')+
       '</tbody></table></div>';
     document.querySelectorAll('.afa-ppg-position').forEach(b=>b.classList.toggle('active',b.dataset.position===position));
   }
@@ -179,7 +179,7 @@ const enhancement = String.raw`<script>
     if(!panel){
       panel=document.createElement('div');
       panel.id='afa-ppg-panel';
-      panel.innerHTML='<div class="afa-ppg-dialog" role="dialog" aria-modal="true" aria-label="Top 100 fantasy total points rankings"><button type="button" class="afa-ppg-close" aria-label="Close rankings">✕</button><h2>Top 100 Players by Position</h2><div class="afa-ppg-positions"></div><div id="afa-ppg-content"></div></div>';
+      panel.innerHTML='<div class="afa-ppg-dialog" role="dialog" aria-modal="true" aria-label="Top 100 fantasy points per team game rankings"><button type="button" class="afa-ppg-close" aria-label="Close rankings">✕</button><h2>Top 100 Players by Position</h2><div class="afa-ppg-positions"></div><div id="afa-ppg-content"></div></div>';
       document.body.appendChild(panel);
       panel.querySelector('.afa-ppg-close').addEventListener('click',()=>panel.classList.remove('show'));
       panel.addEventListener('click',e=>{if(e.target===panel)panel.classList.remove('show');});
@@ -196,7 +196,7 @@ const enhancement = String.raw`<script>
   }
   const afaRankButton=document.createElement('button');
   afaRankButton.type='button';
-  afaRankButton.textContent='Top 100 Points';
+  afaRankButton.textContent='Top 100 PPG';
   afaRankButton.className='afa-ppg-trigger';
   afaRankButton.addEventListener('click',afaOpenRankings);
   const afaNav=document.querySelector('header nav')||document.querySelector('nav')||document.querySelector('header');
