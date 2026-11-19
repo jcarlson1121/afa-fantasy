@@ -334,7 +334,7 @@ const enhancement = String.raw`<script>
     const m=metrics.get(String(t.id));
     const games=(D.scores||[]).filter(g=>Array.isArray(g.sides)&&g.sides.some(s=>String(s.tid)===String(t.id)))
       .slice().sort((a,b)=>Number(a.week)-Number(b.week)||String(a.id).localeCompare(String(b.id)));
-    const rankText=(rank,total)=>rank==null?'Not yet ranked':'#'+rank+' of '+total;
+    const rankText=rank=>rank==null?'—':'#'+rank;
     const color=/^#[0-9a-fA-F]{6}$/.test(String(t.color||''))?t.color:'#344968';
     const rosterCount=P.filter(p=>String(p.tid)===String(t.id)).length;
     const view=document.getElementById('view');
@@ -351,9 +351,9 @@ const enhancement = String.raw`<script>
         '</div>'+
         '<div class="afa-team-metric-grid">'+
           '<div class="afa-team-metric"><span>OFFENSE · YARDS / GAME</span><strong>'+afaFmtRealYPG(m.offense)+'</strong>'+
-            '<div class="afa-team-ranking">'+rankText(m.offRank,offRankedTeams)+' · most yards gained</div></div>'+
+            '<div class="afa-team-ranking">'+rankText(m.offRank)</div></div>'+
           '<div class="afa-team-metric"><span>DEFENSE · YARDS ALLOWED / GAME</span><strong>'+afaFmtRealYPG(m.defense)+'</strong>'+
-            '<div class="afa-team-ranking">'+rankText(m.defRank,defRankedTeams)+' · fewest yards allowed</div></div>'+
+            '<div class="afa-team-ranking">'+rankText(m.defRank)</div></div>'+
         '</div>'+
         '<p class="muted small afa-team-explain">Actual football yards, not fantasy points. Offense = yards gained ÷ completed games with offensive yardage; defense = opponents’ yards gained ÷ completed games with opponent yardage. Games without those team stats are excluded from that average. Lower is better for defense.</p>'+
         '<div class="afa-team-hub-actions"><button class="btn" type="button" data-afa-action="roster">View roster · '+rosterCount+' players</button></div>'+
@@ -408,7 +408,7 @@ const enhancement = String.raw`<script>
     '.afa-team-metric{background:#1d263b;border:1px solid #3a4862;border-radius:12px;padding:18px;min-width:0;}',
     '.afa-team-metric>span{font-size:12px;color:#a5b8d4;font-weight:800;letter-spacing:.03em;}',
     '.afa-team-metric>strong{display:block;font-size:35px;line-height:1.3;margin:7px 0;color:#f1f6ff;}',
-    '.afa-team-ranking{color:#b5f875;font-size:13px;font-weight:800;}',
+    '.afa-team-ranking{color:#e6bb58;font-size:13px;font-weight:800;}',
     '.afa-team-explain{margin:0;line-height:1.5;}',
     '.afa-team-hub-actions{display:flex;gap:10px;flex-wrap:wrap;}',
     '.afa-team-hub-section h3{margin:8px 0;}',
